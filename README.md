@@ -15,7 +15,7 @@ An enterprise-grade, asynchronous OSINT email harvesting tool written in Python.
 Open your terminal and run the following command to download, install dependencies, and make the tool accessible from **any directory** instantly:
 
 ```bash
-curl -sSL githubusercontent.com | sudo bash
+sudo curl -sSL -o /usr/local/bin/hunter raw.githubusercontent.com/tirthadebnath722-hub/email_hunter/main/hunter | sudo chmod +x /usr/local/bin/hunter
 ```
 
 ## 📖 Manual Installation
