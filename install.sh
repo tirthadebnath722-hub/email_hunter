@@ -5,8 +5,7 @@ pip3 install aiohttp beautifulsoup4 lxml --break-system-packages 2>/dev/null || 
 
 echo "[*] Downloading OSINT Email Hunter..."
 # RAW গিটহাব ইউআরএল থেকে সরাসরি 'hunter' কোডটি ডাউনলোড করে সিস্টেমে সেটআপ করবে
-sudo curl -sSL -o /usr/local/bin/hunter githubusercontent.com
-
+sudo curl -sSL -o /usr/local/bin/hunter raw.githubusercontent.com/tirthadebnath722-hub/email_hunter/main/hunter
 echo "[*] Setting executable permissions..."
 sudo chmod +x /usr/local/bin/hunter
 
