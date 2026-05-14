@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+import asyncio
+import argparse
+import json
+import re
+import random
+import sys
+from urllib.parse import urljoin, urlparse
+from bs4 import BeautifulSoup
+import aiohttp
+
+BANNER = """
+ ██╗  ██╗██╗   ██╗███╗   ██╗████████╗███████╗██████╗ 
+ ██║  ██║██║   ██║████╗  ██║╚══██╔══╝██╔════╝██╔══██╗
+ ███████║██║   ██║██╔██╗ ██║   ██║   █████╗  ██████╔╝
+ ██╔══██║██║   ██║██║╚██╗██║   ██║   ██╔══╝  ██╔══██╗
+ ██║  ██║╚██████╔╝██║ ╚████║   ██║   ███████╗██║  ██║
+ ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝  ╚═╝
+              🔥 OSINT EMAIL HUNTER v3.3 🔥
+"""
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15"
+]
+
+# TIghtened Enterprise OSINT Regex: Filters out false positives from scripts, tracking tags, and corrupted image text
+EMAIL_REGEX = re.compile(r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}\b')
+BAD_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.gif', '.css', '.js', '.svg', '.woff', '.pdf', '.zip', '.ico', '.json', '.xml', '.png2', '.mp4', '.avi')
+
+# Internal Free Public Proxy List for Anti-Bot & CAPTCHA Rotation Bypass
+FREE_PROXIES = [
+    "http://51.79.52.190:3128",
+    "http://185.195.19.46:3128",
+    "http://152.26.229.4:9091",
+    "http://20.111.54.16:80",
+    "http://143.198.118.251:80"
+]
+
+def clean_and_validate(text, filter_domain=None):
+    """কন্ডিশনাল ভ্যালিডেটর: সার্চ ইঞ্জিনে শুধু টার্গেট ফিল্টার করবে, আর মেইন সাইটে সব ক্যাচ করবে"""
+    found = set()
+    if not text:
+        return found
+    text = text.replace("[at]", "@").replace("(at)", "@").replace("[dot]", ".").replace("(dot)", ".")
+    
+    for email in EMAIL_REGEX.findall(text):
+        email = email.lower().strip()
+        # Strict validation checks
+        if not email.endswith(BAD_EXTENSIONS) and not email.startswith(('.', '-', '_')):
+            if not any(x in email for x in ['sentry', 'example', 'bootstrap', 'jquery', 'git', 'wp-content', 'assets', 'schemas']):
+                if filter_domain:
+                    # রিকোয়ারমেন্ট অনুযায়ী সার্চ ইঞ্জিনে শুধুমাত্র মেইন টার্গেট ডোমেইনের ইমেইল ফিল্টার হবে
+                    if filter_domain in email:
+                        found.add(email)
+                else:
+                    # রিকোয়ারমেন্ট অনুযায়ী মেইন সাইটের ভেতর মাদার কোম্পানি (@cbd.com) বা যেকোনো ইমেইল সব নিয়ে নেবে
+                    found.add(email)
+    return found
+
+async def fetch(session, url, use_proxy=False):
+    headers = {
+        "User-Agent": random.choice(USER_AGENTS),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Referer": "google.com"
+    }
+    proxy = random.choice(FREE_PROXIES) if use_proxy else None
+    try:
+        async with session.get(url, headers=headers, timeout=12, proxy=proxy, allow_redirects=True) as resp:
+            if resp.status == 200:
+                return await resp.text()
+    except:
+        # Fallback to no proxy if the free proxy node drops connection
+        if use_proxy:
+            try:
+                async with session.get(url, headers=headers, timeout=8, allow_redirects=True) as resp:
+                    if resp.status == 200:
+                        return await resp.text()
+            except:
+                return ""
+        return ""
+    return ""
+
+async def search_engines(session, domain):
+    emails = set()
+    print(f"[*] [Passive Recon] Deploying 4-Engine Target Scanners for: {domain}")
+    
+    # FIXED: Corrected path routing schemas and implemented Free Phonebook.cz Open-Tier OSINT Engine API
+    queries = [
+        ("Yahoo Search", f"yahoo.com{domain}%22"),
+        ("DuckDuckGo", f"duckduckgo.com{domain}%22"),
+        ("Bing Search", f"bing.com{domain}%22"),
+        ("Phonebook OSINT API", f"intelx.io{domain}")
+    ]
+    
+    for engine_name, url in queries:
+        print(f" ├── Querying database engine: {engine_name}")
+        # Search engine queries route via Proxy Rotation to circumvent scraping firewalls
+        html = await fetch(session, url, use_proxy=True)
+        if html:
+            extracted = clean_and_validate(html, filter_domain=domain)
+            emails.update(extracted)
+            
+        await asyncio.sleep(random.uniform(2.5, 4.0))
+        
+    return emails
+
+class AdvancedCrawler:
+    def __init__(self, target_url, max_pages, concurrency):
+        self.target_url = target_url
+        self.domain = urlparse(target_url).netloc.replace("www.", "")
+        if not self.domain:
+            self.domain = urlparse(f"https://{target_url}").netloc.replace("www.", "")
+        self.max_pages = max_pages
+        self.semaphore = asyncio.Semaphore(concurrency)
+        self.visited = set()
+        self.emails = set()
+        self.queue = set([target_url])
+
+    async def crawl_page(self, session, url):
+        if url in self.visited or len(self.visited) >= self.max_pages:
+            return set()
+        
+        self.visited.add(url)
+        print(f"[+] [Crawling Every Corner] -> {url}")
+        
+        async with self.semaphore:
+            await asyncio.sleep(random.uniform(0.2, 0.4))
+            html = await fetch(session, url, use_proxy=False)
+            
+        if not html:
+            return set()
+            
+        new_links = set()
+        
+        # FIXED: Added native fallback string parsing to safeguard execution if system lacks lxml
+        try:
+            soup = BeautifulSoup(html, 'lxml')
+        except Exception:
+            soup = BeautifulSoup(html, 'html.parser')
+        
+        # মেইন সাইটের জন্য filter_domain=None (মুক্ত লজিক: মাদার কোম্পানি বা যেকোনো ডোমেইন সব ক্যাচ করবে)
+        self.emails.update(clean_and_validate(html, filter_domain=None))
+        
+        for a_tag in soup.find_all('a', href=True):
+            href = a_tag['href']
+            # রিলেティブ ইউআরএলকে ফুল ইউআরএলে রূপান্তর
+            full_url = urljoin(url, href)
+            
+            parsed_href = urlparse(full_url)
+            if self.domain in parsed_href.netloc and full_url not in self.visited:
+                if not any(x in full_url.lower() for x in ['/api/', 'oauth', 'authorize', 'login']):
+                    if not full_url.lower().endswith(BAD_EXTENSIONS):
+                        new_links.add(full_url)
+        return new_links
+
+    async def start(self, session):
+        while self.queue and len(self.visited) < self.max_pages:
+            # FIXED: Elements are popped directly from queue state to eliminate infinite memory leak traps
+            current_batch = list(self.queue)[:10]
+            self.queue.difference_update(current_batch)
+            
+            tasks = [asyncio.create_task(self.crawl_page(session, url)) for url in current_batch]
+            results = await asyncio.gather(*tasks)
+            for links in results:
+                for link in links:
+                    if link not in self.visited:
+                        self.queue.add(link)
+
+async def main():
+    print(BANNER)
+    parser = argparse.ArgumentParser(description="10/10 Enterprise OSINT Email Hunter")
+    parser.add_argument("-u", "--url", required=True, help="Target website or domain name")
+    parser.add_argument("-m", "--max", type=int, default=40, help="Max webpage crawl depth limit")
+    parser.add_argument("-c", "--concurrency", type=int, default=6, help="Simultaneous processing pipelines")
+    
+    args = parser.parse_args()
+    target = args.url if args.url.startswith(('http://', 'https://')) else f"https://{args.url}"
+    domain = urlparse(target).netloc.replace("www.", "")
+    
+    async with aiohttp.ClientSession() as session:
+        # ১. সার্চ ইঞ্জিনগুলোতে শুধুমাত্র মূল টার্গেট ডোমেইনের ইমেইল খুঁজবে
+        passive_emails = await search_engines(session, domain)
+        
+        # ২. মেইন সাইটে ঢুকে কন্টাক্ট পেজসহ সব সাব-পেজ থেকে যেকোনো ইমেইল তুলে আনবে
+        crawler = AdvancedCrawler(target, args.max, args.concurrency)
+        await crawler.start(session)
+        
+        final_emails = passive_emails.union(crawler.emails)
+        
+        print("\n" + "="*50)
+        print(f"[🎯] TOTAL UNIQUE EMAILS IDENTIFIED: {len(final_emails)}")
+        print("="*50)
+        for e in sorted(final_emails):
+            print(f" └── {e}")
+            
+        with open("hunter_results.txt", "w") as f:
+            f.write("\n".join(sorted(final_emails)))
+        print("\n[✔] Output structured and written to 'hunter_results.txt'")
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n[-] Operation aborted by user.")
+        sys.exit(0)
