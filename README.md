@@ -24,8 +24,8 @@ If you prefer to install it step-by-step manually:
 
 1. Clone the repository:
    ```bash
-   git clone github.com
-   cd osint-email-hunter
+   git clone https://github.com/tirthadebnath722-hub/email_hunter.git
+   cd email_hunter
    ```
 2. Install Python dependencies:
    ```bash
